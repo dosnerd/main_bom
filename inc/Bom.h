@@ -8,6 +8,7 @@
 
 #include <Peripherals/Display.h>
 #include <Peripherals/Keypad.h>
+#include "Fuses.h"
 
 class Bom {
 public:
@@ -25,29 +26,32 @@ private:
     unsigned                        m_duration;
     Peripherals::Display            m_display;
     Peripherals::Keypad             m_keypad;
+    Fuses                           m_fuses;
     std::string                     m_file;
     bool                            m_displayError;
 
-    int                             m_userInput[6];
+    int                             m_userInput;
+    int                             m_iUserInput;
     bool                            m_userInputActive;
 
 private:
     void                            SetCountdown(int h, int m, int s);
     void                            SetStartTime(int h, int m, int s);
-    void                            DisplayUpdater(time_t end);
-    int*                            ExtractTime(int *buffer, int time, int &ms);
+    void                            DisplayUpdater();
+    static int*                     ExtractTime(int *buffer, int time, int &ms);
 
     void                            SearchBomFile(AssembleConnection &connection, const std::string& moveTo = "./tmp.bom");
-    std::string                     SearchInDir(const std::string &dirName);
+    static std::string              SearchInDir(const std::string &dirName);
 
     void                            AssembleError(AssembleConnection &connection);
 
-    int*                            Encrypt(int *data, int *buffer);
+    static int*                     Encrypt(const int *data, int *buffer);
 
-    bool                            HasExtension(char *filename);
+    static bool                     HasExtension(char *filename);
 
     AssembleConnection &            DisplayTime(AssembleConnection &connection, int *buffer);
     void                            ReadKeyPad();
+    void                            CheckUserCode();
 };
 
 

@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <limits>
+#include <poll.h>
 #include "Peripherals/Keypad.h"
 
 
@@ -16,7 +17,13 @@ Peripherals::Keypad::Key Peripherals::Keypad::GetKey() {
 }
 
 bool Peripherals::Keypad::SimulateCheck() {
-    return std::cin.peek() != EOF;
+    pollfd cinfd[1];
+    // Theoretically this should always be 0, but one fileno call isn't going to hurt, and if
+    // we try to run somewhere that stdin isn't fd 0 then it will still just work
+    cinfd[0].fd = fileno(stdin);
+    cinfd[0].events = POLLIN;
+
+    return poll(cinfd, 1, 10);
 }
 
 Peripherals::Keypad::Key Peripherals::Keypad::SimulateKey() {

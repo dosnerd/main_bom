@@ -42,7 +42,7 @@ namespace Peripherals {
 
     private:
         void                        ShowToScreen(int *segment);
-        void                        ShowSegmentToScreen(unsigned segment, unsigned index);
+        static void                        ShowSegmentToScreen(unsigned segment, unsigned index);
         void                        SimulateLeds();
     };
 };

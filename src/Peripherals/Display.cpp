@@ -113,6 +113,8 @@ void Peripherals::Display::ShowToScreen(int *segments) {
                     ShowSegmentToScreen(segments[j], 3);
                     ShowSegmentToScreen(segments[j], 8);
                     break;
+                default:
+                    break;
             }
         }
         std::cout << std::endl;

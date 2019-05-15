@@ -12,7 +12,8 @@
 #include <sys/stat.h>
 
 Bom::Bom()
-        : m_startTime(0), m_duration(0), m_file(""), m_displayError(false), m_userInput{0}, m_userInputActive(false) {
+        : m_startTime(0), m_start(0), m_duration(0), m_file(""), m_displayError(false), m_userInput(0), m_iUserInput(0),
+          m_userInputActive(false) {
 
 }
 
@@ -36,7 +37,7 @@ void Bom::WaitForArmed() {
     }
 
     settings = connection.Execute(input, 0);
-    if (settings.size() < 6) {
+    if (settings.size() < 7) {
         std::cout << "ERR SETUP" << connection.GetFeedback() << std::endl;
         m_display.Safe();
         goto SEARCH;
@@ -44,6 +45,9 @@ void Bom::WaitForArmed() {
 
     SetCountdown(settings[0], settings[1], settings[2]);
     SetStartTime(settings[3], settings[4], settings[5]);
+    if (settings[6] > 0)
+        m_fuses.SetMinCodes(settings[6]);
+
     std::cout << "Setup done" << std::endl;
 }
 
@@ -51,6 +55,8 @@ void Bom::WaitForCountdown() {
     int ms = -1;
     int buffer[8] = {0};
     bool toggle = false;
+    unsigned currentTime;
+
     m_start = time(nullptr);
     m_start -= m_start % 86400; //Remove hours
     m_start -= m_start % 3600;  //Remove minutes
@@ -60,7 +66,8 @@ void Bom::WaitForCountdown() {
 
 
     while (time(nullptr) <= m_start) {
-        if ((time(nullptr) & 0x01) == 0x01) {
+        currentTime = time(nullptr);
+        if ((currentTime & 0x01u) == 0x01) {
             toggle = true;
         } else if (toggle) {
             toggle = false;
@@ -69,12 +76,12 @@ void Bom::WaitForCountdown() {
             m_display.SetLed(Peripherals::Display::ARMED, BLACK);
         }
 
-        if ((time(nullptr) & 0x03) == 0x03) {
+        if ((currentTime & 0x03u) == 0x03) {
             ExtractTime(buffer, m_start + 60 * 60 * 2, ms);
 
             for (int i = 0; i < 6; ++i) {
                 std::cout << buffer[i] << ".";
-                buffer[i] = m_display.To7Segment(buffer[i]);
+                buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
             }
             std::cout << std::endl;
             m_display.DisplaySegments(buffer);
@@ -88,23 +95,40 @@ void Bom::WaitForCountdown() {
 }
 
 void Bom::CountDown() {
-    time_t end = m_start + m_duration;
-    std::thread displayer(&Bom::DisplayUpdater, this, end);
+    unsigned currentTime;
+    int ms;
+    int buffer[8] = {0};
+    std::thread displayer(&Bom::DisplayUpdater, this);
+
+    for (int i = 1; i <= m_fuses.GetIncorrectCodes(); ++i) {
+        m_duration -= i * PENALTY_STEPS;
+    }
 
     m_display.SetLed(Peripherals::Display::STATUS, BLACK);
-    while (time(nullptr) < end) {
+
+    while ((currentTime = time(nullptr)) < (m_start + m_duration) &&
+           m_fuses.GetActiveFuses() > 0) {
+
         if (m_keypad.Check()) {
             m_display.SetLed(Peripherals::Display::STATUS, BLUE);
             m_userInputActive = true;
+
             ReadKeyPad();
         }
+
+        CheckUserCode();
         usleep(1 * 1000 * 1000);
     }
-    std::cout << "BIEM" << std::endl;
+    m_duration = 0;
+
+    if (m_fuses.GetActiveFuses() > 0) {
+        std::cout << "BIEM" << std::endl;
+    }
 
     system("rm ./setup.bom");
-    m_duration = 0;
+    system("rm ./fuses");
     displayer.join();
+
 }
 
 void Bom::SetCountdown(int h, int m, int s) {
@@ -115,14 +139,21 @@ void Bom::SetStartTime(int h, int m, int s) {
     m_startTime = h * 3600 + m * 60 + s;
 }
 
-void Bom::DisplayUpdater(time_t end) {
+void Bom::DisplayUpdater() {
     AssembleConnection connection;
     int buffer[8] = {0};
     int ms = 99;
-
+    unsigned timeLeft = 0;
+    unsigned timeLeftCopy = 0;
     while (m_duration > 0) {
         SearchBomFile(connection);
-        ExtractTime(buffer, end - time(nullptr), ms);
+
+        timeLeftCopy = timeLeft;
+        timeLeft = m_start + m_duration - time(nullptr) - 1;
+
+
+
+        ExtractTime(buffer, timeLeft, ms);
 
         if (ms > 90) {
             m_display.SetLed(Peripherals::Display::ARMED, RED);
@@ -133,13 +164,20 @@ void Bom::DisplayUpdater(time_t end) {
         if (m_userInputActive) {
             m_display.DisplayUserInputs();
         } else {
-            connection = DisplayTime(connection, buffer);
+//            connection = DisplayTime(connection, buffer);
         }
-        std::cout << "File: " << m_file << std::endl;
+//        std::cout << "File: " << m_file << std::endl;
+        std::cout << "ms: " << ms << std::endl;
 
         usleep(10 * 1000);
         ms--;
     }
+
+    ExtractTime(buffer, timeLeftCopy, ms);
+    for (int i = 0; i < 6; ++i) {
+        buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
+    }
+    m_display.DisplaySegments(buffer);
 }
 
 int *Bom::ExtractTime(int *buffer, int time, int &ms) {
@@ -191,14 +229,16 @@ int *Bom::ExtractTime(int *buffer, int time, int &ms) {
 
 void Bom::SearchBomFile(AssembleConnection &connection, const std::string &moveTo) {
     std::string file = SearchInDir("/media/");
-    struct stat buffer;
+    struct stat buffer{};
 
     if (file == m_file && !m_file.empty()) {
         m_file = file;
         return;
-    } else if (file.empty() && stat(moveTo.c_str(), &buffer) == 0) {
-        connection.StartAssembler(moveTo);
-        m_file = moveTo;
+    } else if (file.empty()) {
+        if (stat(moveTo.c_str(), &buffer) == 0) {
+            connection.StartAssembler(moveTo);
+            m_file = moveTo;
+        }
         return;
     }
 
@@ -212,11 +252,11 @@ void Bom::SearchBomFile(AssembleConnection &connection, const std::string &moveT
 std::string Bom::SearchInDir(const std::string &dirName) {
     DIR *d;
     struct dirent *dir;
-    std::string name = "";
+    std::string name;
 
     d = opendir(dirName.c_str());
     if (d) {
-        while ((dir = readdir(d)) != NULL) {
+        while ((dir = readdir(d)) != nullptr) {
             if (dir->d_name[0] == '.') continue;
             if (dir->d_name[0] == 'D' || dir->d_name[0] == 'O') continue;
 
@@ -257,7 +297,7 @@ void Bom::AssembleError(AssembleConnection &connection) {
     }
 }
 
-int *Bom::Encrypt(int *data, int *buffer) {
+int *Bom::Encrypt(const int *data, int *buffer) {
     buffer[0] = data[0] + data[6];
     buffer[1] = data[1] * 3 + 32 + data[6];
 
@@ -282,7 +322,7 @@ AssembleConnection &Bom::DisplayTime(AssembleConnection &connection, int *buffer
     std::vector<int> processed;
 
     for (int i = 0; i < 6; ++i) {
-        buffer[i] = m_display.To7Segment(buffer[i]);
+        buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
 
         Encrypt(buffer, encrypted);
         processed = connection.Execute(encrypted, 8);
@@ -301,47 +341,111 @@ AssembleConnection &Bom::DisplayTime(AssembleConnection &connection, int *buffer
 
 void Bom::ReadKeyPad() {
     enum Peripherals::Keypad::Key pressed = m_keypad.GetKey();
+
+    if (m_iUserInput == -1) return;
+    if (pressed != Peripherals::Keypad::KEY_ASTERISK && pressed != Peripherals::Keypad::KEY_HASH_TAG) {
+        if (m_iUserInput >= 6 || m_iUserInput < 0) return;
+
+        m_iUserInput++;
+        m_userInput *= 10;
+    }
+
     switch (pressed) {
         case Peripherals::Keypad::NONE:
+            m_userInput /= 10;
+            m_iUserInput--;
             break;
         case Peripherals::Keypad::KEY1:
             m_display.SetUserInput(Peripherals::Display::To7Segment(1));
+            m_userInput += 1;
             break;
         case Peripherals::Keypad::KEY2:
             m_display.SetUserInput(Peripherals::Display::To7Segment(2));
+            m_userInput += 2;
             break;
         case Peripherals::Keypad::KEY3:
             m_display.SetUserInput(Peripherals::Display::To7Segment(3));
+            m_userInput += 3;
             break;
         case Peripherals::Keypad::KEY4:
             m_display.SetUserInput(Peripherals::Display::To7Segment(4));
+            m_userInput += 4;
             break;
         case Peripherals::Keypad::KEY5:
             m_display.SetUserInput(Peripherals::Display::To7Segment(5));
+            m_userInput += 5;
             break;
         case Peripherals::Keypad::KEY6:
             m_display.SetUserInput(Peripherals::Display::To7Segment(6));
+            m_userInput += 6;
             break;
         case Peripherals::Keypad::KEY7:
             m_display.SetUserInput(Peripherals::Display::To7Segment(7));
+            m_userInput += 7;
             break;
         case Peripherals::Keypad::KEY8:
             m_display.SetUserInput(Peripherals::Display::To7Segment(8));
+            m_userInput += 8;
             break;
         case Peripherals::Keypad::KEY9:
             m_display.SetUserInput(Peripherals::Display::To7Segment(9));
+            m_userInput += 9;
             break;
         case Peripherals::Keypad::KEY0:
             m_display.SetUserInput(Peripherals::Display::To7Segment(0));
             break;
+
         case Peripherals::Keypad::KEY_ASTERISK:
             m_display.ResetUserInput();
+            m_userInput = 0;
+            m_iUserInput = 0;
             m_display.SetLed(Peripherals::Display::STATUS, BLACK);
             m_userInputActive = false;
             break;
+
         case Peripherals::Keypad::KEY_HASH_TAG:
-            m_display.SetLed(Peripherals::Display::STATUS, YELLOW);
-            m_userInputActive = false;
+            if (m_iUserInput > 0) {
+                m_iUserInput = -1;
+            } else {
+                m_display.ResetUserInput();
+                m_userInput = 0;
+                m_iUserInput = 0;
+                m_userInputActive = false;
+                m_display.SetLed(Peripherals::Display::STATUS, BLACK);
+            }
             break;
+    }
+}
+
+void Bom::CheckUserCode() {
+    static unsigned trigger = 0;
+    unsigned now = time(nullptr);
+
+    if (m_iUserInput > -1) {
+//        trigger = now + 15;
+        trigger = now + 1;
+        return;
+    } else if (trigger > now) {
+        if ((now & 0x01u) == 0x01) {
+            m_display.SetLed(Peripherals::Display::STATUS, YELLOW);
+        } else {
+            m_display.SetLed(Peripherals::Display::STATUS, BLACK);
+        }
+        return;
+    } else if (trigger + 10 < now) {
+        m_display.ResetUserInput();
+        m_userInput = 0;
+        m_iUserInput = 0;
+        m_userInputActive = false;
+        m_display.SetLed(Peripherals::Display::STATUS, BLACK);
+        return;
+    } else if (m_iUserInput == -1) {
+        if (m_fuses.CheckCode(m_userInput)) {
+            m_display.SetLed(Peripherals::Display::STATUS, GREEN);
+        } else {
+            m_display.SetLed(Peripherals::Display::STATUS, RED);
+            m_duration -= PENALTY_STEPS * m_fuses.GetIncorrectCodes();
+        }
+        m_iUserInput = -2;
     }
 }

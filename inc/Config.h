@@ -8,4 +8,7 @@
 #define GPIO_LOW                0
 #define GPIO_HIGH               1
 
+#define NUMBER_OF_PUZZELS       15
+#define PENALTY_STEPS           (5 * 60)
+
 #endif //MAIN_BOM_CONFIG_H
