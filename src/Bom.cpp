@@ -77,7 +77,9 @@ void Bom::WaitForCountdown() {
         }
 
         if ((currentTime & 0x03u) == 0x03) {
-            ExtractTime(buffer, m_start + 60 * 60 * 2, ms);
+            std::chrono::system_clock::time_point utc2 =
+                    std::chrono::system_clock::from_time_t(m_start) + std::chrono::hours(2);
+            ExtractTime(buffer, utc2.time_since_epoch(), ms);
 
             for (int i = 0; i < 6; ++i) {
                 std::cout << buffer[i] << ".";
@@ -96,16 +98,13 @@ void Bom::WaitForCountdown() {
 
 void Bom::CountDown() {
     unsigned currentTime;
-    int ms;
-    int buffer[8] = {0};
     std::thread displayer(&Bom::DisplayUpdater, this);
 
-    for (int i = 1; i <= m_fuses.GetIncorrectCodes(); ++i) {
+    for (unsigned i = 1; i <= m_fuses.GetIncorrectCodes(); ++i) {
         m_duration -= i * PENALTY_STEPS;
     }
 
     m_display.SetLed(Peripherals::Display::STATUS, BLACK);
-
     while ((currentTime = time(nullptr)) < (m_start + m_duration) &&
            m_fuses.GetActiveFuses() > 0) {
 
@@ -119,6 +118,7 @@ void Bom::CountDown() {
         CheckUserCode();
         usleep(1 * 1000 * 1000);
     }
+    m_display.SetLed(Peripherals::Display::STATUS, BLACK);
     m_duration = 0;
 
     if (m_fuses.GetActiveFuses() > 0) {
@@ -142,18 +142,16 @@ void Bom::SetStartTime(int h, int m, int s) {
 void Bom::DisplayUpdater() {
     AssembleConnection connection;
     int buffer[8] = {0};
-    int ms = 99;
-    unsigned timeLeft = 0;
-    unsigned timeLeftCopy = 0;
+    int ms;
+    std::chrono::system_clock::time_point end;
+    std::chrono::system_clock::time_point end_copy;
+
+
     while (m_duration > 0) {
         SearchBomFile(connection);
-
-        timeLeftCopy = timeLeft;
-        timeLeft = m_start + m_duration - time(nullptr) - 1;
-
-
-
-        ExtractTime(buffer, timeLeft, ms);
+        end_copy = end;
+        end = std::chrono::system_clock::from_time_t(m_start + m_duration);
+        ExtractTime(buffer, end - std::chrono::system_clock::now(), ms);
 
         if (ms > 90) {
             m_display.SetLed(Peripherals::Display::ARMED, RED);
@@ -164,41 +162,47 @@ void Bom::DisplayUpdater() {
         if (m_userInputActive) {
             m_display.DisplayUserInputs();
         } else {
-//            connection = DisplayTime(connection, buffer);
+            connection = DisplayTime(connection, buffer);
         }
-//        std::cout << "File: " << m_file << std::endl;
+        std::cout << "File: " << m_file << std::endl;
         std::cout << "ms: " << ms << std::endl;
 
         usleep(10 * 1000);
-        ms--;
     }
 
-    ExtractTime(buffer, timeLeftCopy, ms);
+    ExtractTime(buffer, end_copy - std::chrono::system_clock::now(), ms);
     for (int i = 0; i < 6; ++i) {
         buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
     }
     m_display.DisplaySegments(buffer);
 }
 
-int *Bom::ExtractTime(int *buffer, int time, int &ms) {
-    static int prevSec = 99;
-    int sec, min, hour, offset;
+int *Bom::ExtractTime(int *buffer, std::chrono::system_clock::duration time, int &ms) {
+    int offset;
 
-    sec = time % 60;
-    time /= 60;
+    Days days;
+    std::chrono::hours hour;
+    std::chrono::minutes minutes;
+    std::chrono::seconds seconds;
+    std::chrono::milliseconds milliseconds;
 
-    min = time % 60;
-    time /= 60;
+    days = std::chrono::duration_cast<Days>(time);
+    time -= days;
 
-    hour = time % 24;
+    hour = std::chrono::duration_cast<std::chrono::hours>(time);
+    time -= hour;
 
+    minutes = std::chrono::duration_cast<std::chrono::minutes>(time);
+    time -= minutes;
 
-    if (prevSec != sec) {
-        prevSec = sec;
-        ms = 99;
-    }
+    seconds = std::chrono::duration_cast<std::chrono::seconds>(time);
+    time -= seconds;
 
-    if (hour == 0) {
+    milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(time);
+    time -= milliseconds;
+
+    ms = milliseconds.count() / 10;
+    if (hour.count() == 0) {
         offset = 2;
 
         buffer[0] = ms % 10;
@@ -206,19 +210,19 @@ int *Bom::ExtractTime(int *buffer, int time, int &ms) {
     } else {
         offset = 0;
 
-        buffer[4] = hour % 10;
+        buffer[4] = hour.count() % 10;
         hour /= 10;
-        buffer[5] = hour % 10;
+        buffer[5] = hour.count() % 10;
     }
 
 
-    buffer[offset + 0] = sec % 10;
-    sec /= 10;
-    buffer[offset + 1] = sec % 10;
+    buffer[offset + 0] = seconds.count() % 10;
+    seconds /= 10;
+    buffer[offset + 1] = seconds.count() % 10;
 
-    buffer[offset + 2] = min % 10;
-    min /= 10;
-    buffer[offset + 3] = min % 10;
+    buffer[offset + 2] = minutes.count() % 10;
+    minutes /= 10;
+    buffer[offset + 3] = minutes.count() % 10;
 
 
     buffer[6] = ms % 10;
@@ -422,8 +426,7 @@ void Bom::CheckUserCode() {
     unsigned now = time(nullptr);
 
     if (m_iUserInput > -1) {
-//        trigger = now + 15;
-        trigger = now + 1;
+        trigger = now + CODE_VALIDATE_TIMEOUT;
         return;
     } else if (trigger > now) {
         if ((now & 0x01u) == 0x01) {

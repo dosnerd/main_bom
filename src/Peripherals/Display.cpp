@@ -9,7 +9,6 @@
 
 Peripherals::Display::Display() : m_status(BLACK), m_armed(BLACK), m_userInput{0}, m_iUserInput(5)
 {
-
 }
 
 void Peripherals::Display::DisplaySegments(int *segments) {
@@ -90,7 +89,7 @@ void Peripherals::Display::ResetUserInput() {
 }
 
 void Peripherals::Display::ShowToScreen(int *segments) {
-    std::cout << ESC "2J" << std::flush;
+    std::cout << ESC "0;0H" << std::flush;
 
     for (int line = 0; line < 3; ++line) {
         for (int j = 5; j >= 0; --j) {

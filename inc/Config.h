@@ -10,5 +10,6 @@
 
 #define NUMBER_OF_PUZZELS       15
 #define PENALTY_STEPS           (5 * 60)
+#define CODE_VALIDATE_TIMEOUT   15
 
 #endif //MAIN_BOM_CONFIG_H
