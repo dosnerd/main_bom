@@ -5,16 +5,20 @@
 #include <alsa/asoundlib.h>
 #include <cmath>
 
+#define CHANNELS            1
+#define SAMPLE_RATE         8000
+#define FRAME_PER_PERIOD    1024
+#define SAMPLE_SIZE         1
+#define BUFFER_SIZE         (FRAME_PER_PERIOD * SAMPLE_SIZE * CHANNELS)
+
 int main() {
     std::string device = "default";
-    unsigned char buffer[16*1024] = { 0 };
+    float buffer[BUFFER_SIZE] = {0};
 
     int err;
-    unsigned int i;
+    unsigned int i, j;
     snd_pcm_t *handle;
     snd_pcm_sframes_t frames;
-    for (i = 0; i < sizeof(buffer); i++)
-        buffer[i] = 0;
 
     if ((err = snd_pcm_open(&handle, device.c_str(), SND_PCM_STREAM_PLAYBACK, 0)) < 0) {
         printf("Playback open error: %s\n", snd_strerror(err));
@@ -22,29 +26,35 @@ int main() {
     }
 
     if ((err = snd_pcm_set_params(handle,
-                                  SND_PCM_FORMAT_U8,
+                                  SND_PCM_FORMAT_FLOAT,
                                   SND_PCM_ACCESS_RW_INTERLEAVED,
-                                  1,
-//                                  48000,
-                                  8000,
-                                  1,
+                                  CHANNELS,
+                                  SAMPLE_RATE,
+                                  true,
                                   500000)) < 0) {   /* 0.5sec */
         printf("Playback open error: %s\n", snd_strerror(err));
         exit(EXIT_FAILURE);
     }
 
+    for (i = 0;; i++) {
+        for (j = 0; j < BUFFER_SIZE; j++) {
+            if ((i & 0x07) == 0x07) {
+                buffer[j] = sin(2 * M_PI * j / SAMPLE_RATE * 2000);
+            } else {
+                buffer[j] = 0;
+            }
 
+        }
 
-    for (i = 0; i < 16; i++) {
-        frames = snd_pcm_writei(handle, buffer, sizeof(buffer));
+        frames = snd_pcm_writei(handle, buffer, FRAME_PER_PERIOD * SAMPLE_SIZE * CHANNELS);
         if (frames < 0)
             frames = snd_pcm_recover(handle, frames, 0);
         if (frames < 0) {
             printf("snd_pcm_writei failed: %s\n", snd_strerror(frames));
             break;
         }
-        if (frames > 0 && frames < (long)sizeof(buffer))
-            printf("Short write (expected %li, wrote %li)\n", (long)sizeof(buffer), frames);
+        if (frames > 0 && frames < BUFFER_SIZE)
+            printf("Short write (expected %i, wrote %li)\n", BUFFER_SIZE, frames);
     }
 
     snd_pcm_close(handle);
