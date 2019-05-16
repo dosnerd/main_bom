@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 project(main_bom)
 
+
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY bin/)
 
@@ -11,6 +12,9 @@ SET(CMAKE_SYSTEM_NAME Linux)
 SET(CMAKE_C_COMPILER   /media/david/DATA_2/school/3.3/Project/codes/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-g++)
 SET(CMAKE_CXX_COMPILER /media/david/DATA_2/school/3.3/Project/codes/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-g++)
 find_package(Threads REQUIRED)
+
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lasound")
+SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lasound")
 
 # Define the sysroot path for the RaspberryPi distribution in our tools folder
 SET(CMAKE_FIND_ROOT_PATH /media/david/DATA_2/school/3.3/Project/codes/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/sysroot/)
