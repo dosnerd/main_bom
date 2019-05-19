@@ -3,43 +3,64 @@
 //
 
 #include <iostream>
+#include <linux/spi/spidev.h>
 #include "Peripherals/Display.h"
 
 #define ESC         "\x1B\x5B"
 
-Peripherals::Display::Display() : m_status(BLACK), m_armed(BLACK), m_userInput{0}, m_iUserInput(5)
-{
+Peripherals::Display::Display() : m_status(BLACK), m_armed(BLACK), m_userInput{0}, m_iUserInput(5) {
+
 }
 
 void Peripherals::Display::DisplaySegments(int *segments) {
+#if SIMULATION
     ShowToScreen(segments);
+#else
+    for (int i = 0; i < 6; ++i) {
+        if (i & 0x01u) {
+            m_driver.SetSegment(5 - i, segments[i]);
+        } else {
+            m_driver.SetSegment(5 - i, segments[i] | 0x80u);
+        }
+    }
+#endif
 }
 
 void Peripherals::Display::SetLed(Peripherals::Display::Led led, int value) {
-    switch (led){
+    switch (led) {
         case STATUS:
+#if !SIMULATION
+            if (m_status != value){
+                m_driver.SetLed(1, value);
+            }
+#endif
             m_status = value;
             break;
         case ARMED:
+#if !SIMULATION
+            if (m_armed != value){
+                m_driver.SetLed(0, value);
+            }
+#endif
             m_armed = value;
             break;
     }
 }
 
 void Peripherals::Display::Safe() {
-    int segments[6] = { 0 };
+    int segments[6] = {0};
     segments[5] = 0b01101101;   //S
     segments[4] = 0b01011111;   //A
     segments[3] = 0b01110001;   //F
     segments[2] = 0b01111001;   //E
 
-    m_status = GREEN;
-    m_armed = BLACK;
-    ShowToScreen(segments);
+    SetLed(ARMED, BLACK);
+    SetLed(STATUS, GREEN);
+    DisplaySegments(segments);
 }
 
 void Peripherals::Display::Clear() {
-    int segments[6] = { 0 };
+    int segments[6] = {0};
     DisplaySegments(segments);
 }
 
@@ -156,6 +177,6 @@ void Peripherals::Display::ShowSegmentToScreen(unsigned segment, unsigned index)
 void Peripherals::Display::SimulateLeds() {
     std::cout << "ARMED:\t" ESC << std::to_string(m_armed) << "m" << " ";
     std::cout << ESC "0m" << std::endl;
-    std::cout << "STATUS:\t" ESC << std::to_string(m_status)<< "m" << " ";
+    std::cout << "STATUS:\t" ESC << std::to_string(m_status) << "m" << " ";
     std::cout << ESC "0m" << std::endl;
 }

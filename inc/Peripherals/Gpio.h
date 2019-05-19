@@ -9,7 +9,9 @@ namespace Peripherals {
     class Gpio {
     public:
         enum            GpioPins {
-
+            WriteEnable = 0,
+            ReadEnable = 5,
+            JumperInterrupt = 17,
         };
 
         enum            GpioType {

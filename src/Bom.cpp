@@ -82,7 +82,6 @@ void Bom::WaitForCountdown() {
             ExtractTime(buffer, utc2.time_since_epoch(), ms);
 
             for (int i = 0; i < 6; ++i) {
-                std::cout << buffer[i] << ".";
                 buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
             }
             std::cout << std::endl;
@@ -142,30 +141,30 @@ void Bom::SetStartTime(int h, int m, int s) {
 void Bom::DisplayUpdater() {
     AssembleConnection connection;
     int buffer[8] = {0};
-    int ms;
+    int ms, trigger;
     std::chrono::system_clock::time_point end;
     std::chrono::system_clock::time_point end_copy;
 
 
+    trigger = 0;
     while (m_duration > 0) {
         SearchBomFile(connection);
         end_copy = end;
         end = std::chrono::system_clock::from_time_t(m_start + m_duration);
-        ExtractTime(buffer, end - std::chrono::system_clock::now(), ms);
+        std::chrono::system_clock::duration timeLeft = end - std::chrono::system_clock::now();
 
-        if (ms > 90) {
-            m_display.SetLed(Peripherals::Display::ARMED, RED);
-        } else {
-            m_display.SetLed(Peripherals::Display::ARMED, BLACK);
-        }
+        ExtractTime(buffer, timeLeft, ms);
+
+        trigger = ArmedNotifier(ms, trigger, timeLeft);
 
         if (m_userInputActive) {
             m_display.DisplayUserInputs();
         } else {
             connection = DisplayTime(connection, buffer);
         }
-        std::cout << "File: " << m_file << std::endl;
-        std::cout << "ms: " << ms << std::endl;
+//        std::cout << "File: " << m_file << "         " << std::endl;
+//        std::cout << "ms: " << ms << "         " << std::endl;
+//        std::cout << "trigger: " << trigger << "         " << std::endl;
 
         usleep(10 * 1000);
     }
@@ -236,12 +235,16 @@ void Bom::SearchBomFile(AssembleConnection &connection, const std::string &moveT
     struct stat buffer{};
 
     if (file == m_file && !m_file.empty()) {
-        m_file = file;
         return;
     } else if (file.empty()) {
+        // Check if file exists
         if (stat(moveTo.c_str(), &buffer) == 0) {
-            connection.StartAssembler(moveTo);
-            m_file = moveTo;
+            if (m_file != moveTo) {
+                connection.StartAssembler(moveTo);
+                m_file = moveTo;
+            }
+        } else {
+            m_file = "";
         }
         return;
     }
@@ -426,7 +429,8 @@ void Bom::CheckUserCode() {
     unsigned now = time(nullptr);
 
     if (m_iUserInput > -1) {
-        trigger = now + CODE_VALIDATE_TIMEOUT;
+//        trigger = now + CODE_VALIDATE_TIMEOUT;
+        trigger = now + 1;
         return;
     } else if (trigger > now) {
         if ((now & 0x01u) == 0x01) {
@@ -448,7 +452,45 @@ void Bom::CheckUserCode() {
         } else {
             m_display.SetLed(Peripherals::Display::STATUS, RED);
             m_duration -= PENALTY_STEPS * m_fuses.GetIncorrectCodes();
+            m_sound.Wrong();
         }
         m_iUserInput = -2;
     }
+}
+
+
+int Bom::ArmedNotifier(int ms, int trigger, const std::chrono::system_clock::duration &timeLeft) {
+    if (timeLeft < std::chrono::minutes(15)) {
+        if (ms / 10 == trigger / 10) {
+            m_sound.Beep();
+            m_display.SetLed(Peripherals::Display::ARMED, RED);
+            trigger = ms - 30;
+            while (trigger < 0) trigger += 100;
+        } else {
+
+        }
+    } else if (timeLeft < std::chrono::minutes(30)) {
+        if ((ms / 10 == 4 || ms / 10 == 9)) {
+            if (trigger == 0) {
+                m_sound.Beep();
+                trigger = 1;
+            }
+            m_display.SetLed(Peripherals::Display::ARMED, RED);
+        } else {
+            m_display.SetLed(Peripherals::Display::ARMED, BLACK);
+            trigger = 0;
+        }
+    } else {
+        if (ms / 10 == 9) {
+            m_display.SetLed(Peripherals::Display::ARMED, RED);
+            if (trigger == 0) {
+                trigger = 1;
+                m_sound.Beep();
+            }
+        } else {
+            m_display.SetLed(Peripherals::Display::ARMED, BLACK);
+            trigger = 0;
+        }
+    }
+    return trigger;
 }

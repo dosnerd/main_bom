@@ -8,6 +8,7 @@
 
 #include <Peripherals/Display.h>
 #include <Peripherals/Keypad.h>
+#include <Peripherals/Sound.h>
 #include "Fuses.h"
 #include <chrono>
 
@@ -29,6 +30,7 @@ private:
     unsigned                        m_duration;
     Peripherals::Display            m_display;
     Peripherals::Keypad             m_keypad;
+    Peripherals::Sound              m_sound;
     Fuses                           m_fuses;
     std::string                     m_file;
     bool                            m_displayError;
@@ -55,6 +57,8 @@ private:
     AssembleConnection &            DisplayTime(AssembleConnection &connection, int *buffer);
     void                            ReadKeyPad();
     void                            CheckUserCode();
+
+    int                             ArmedNotifier(int ms, int trigger, const std::chrono::system_clock::duration &timeLeft);
 };
 
 

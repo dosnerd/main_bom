@@ -5,6 +5,8 @@
 #ifndef MAIN_BOM_DISPLAY_H
 #define MAIN_BOM_DISPLAY_H
 
+#include "StLedDriver.h"
+
 #define BLACK       40
 #define RED         41
 #define GREEN       42
@@ -35,6 +37,7 @@ namespace Peripherals {
         void                        ResetUserInput();
 
     private:
+        Peripherals::StLedDriver    m_driver;
         int                         m_status;
         int                         m_armed;
         int                         m_userInput[6];

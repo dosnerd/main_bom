@@ -9,11 +9,19 @@
 
 
 bool Peripherals::Keypad::Check() {
+#if SIMULATION
     return SimulateCheck();
+#else
+    return false;
+#endif
 }
 
 Peripherals::Keypad::Key Peripherals::Keypad::GetKey() {
+#if SIMULATION
     return SimulateKey();
+#else
+    return NONE;
+#endif
 }
 
 bool Peripherals::Keypad::SimulateCheck() {
