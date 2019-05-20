@@ -17,6 +17,7 @@
 
 #define NUMBER_OF_PUZZELS               15
 #define PENALTY_STEPS                   (5 * 60)
+#define CABLE_BONUS                     (15 * 60)
 #define CODE_VALIDATE_TIMEOUT           15
 
 #define SPI_BUFFER_SIZE                 4                                   // Buffer size SPI
@@ -26,17 +27,3 @@
 #define SPI_BITS_PER_WORD               8                                   // Amounts of bits per word
 
 #endif //MAIN_BOM_CONFIG_H
-
-
-/*
- _   _   _   _          i/BOM# ./main_bom
-|_   _| |_  |_
- _| |_| |   |_
-ARMED:as berrypi:/home/pi/BOM# ./main_bom
-STATUS:
-^C
-root@raspberrypi:/home/pi/BOM#
-
-
- *
- */

@@ -8,7 +8,8 @@
 
 #define ESC         "\x1B\x5B"
 
-Peripherals::Display::Display() : m_status(BLACK), m_armed(BLACK), m_userInput{0}, m_iUserInput(5) {
+Peripherals::Display::Display()
+        : m_status(BLACK), m_armed(BLACK), m_userInput{0}, m_iUserInput(5) {
 
 }
 
@@ -17,11 +18,7 @@ void Peripherals::Display::DisplaySegments(int *segments) {
     ShowToScreen(segments);
 #else
     for (int i = 0; i < 6; ++i) {
-        if (i & 0x01u) {
             m_driver.SetSegment(5 - i, segments[i]);
-        } else {
-            m_driver.SetSegment(5 - i, segments[i] | 0x80u);
-        }
     }
 #endif
 }
@@ -30,7 +27,7 @@ void Peripherals::Display::SetLed(Peripherals::Display::Led led, int value) {
     switch (led) {
         case STATUS:
 #if !SIMULATION
-            if (m_status != value){
+            if (m_status != value) {
                 m_driver.SetLed(1, value);
             }
 #endif
@@ -38,7 +35,7 @@ void Peripherals::Display::SetLed(Peripherals::Display::Led led, int value) {
             break;
         case ARMED:
 #if !SIMULATION
-            if (m_armed != value){
+            if (m_armed != value) {
                 m_driver.SetLed(0, value);
             }
 #endif
@@ -107,6 +104,10 @@ void Peripherals::Display::ResetUserInput() {
     for (int &i : m_userInput) {
         i = 0;
     }
+}
+
+Peripherals::StLedDriver &Peripherals::Display::GetDriver() {
+    return m_driver;
 }
 
 void Peripherals::Display::ShowToScreen(int *segments) {

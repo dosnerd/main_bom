@@ -10,6 +10,7 @@
 #include <string>
 #include <mutex>
 #include "Config.h"
+#include "Gpio.h"
 
 namespace Peripherals {
     class SpiInterface {
@@ -27,10 +28,7 @@ namespace Peripherals {
         void                    WriteRaw(uint8_t value);
         void                    WriteRaw(uint8_t *values, uint8_t size);
 
-        uint8_t                 ReadRaw();
-        void                    ReadRaw(uint8_t *buffer, uint8_t size);
-
-        virtual void            ReadWriteRaw(uint8_t *txBuffer, uint8_t *rxBuffer, uint8_t size);
+        uint8_t                 Read(uint8_t memory, Gpio &rd, Gpio &wr);
 
 
     private:

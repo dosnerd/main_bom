@@ -9,6 +9,12 @@
 #include "SpiInterface.h"
 #include "Gpio.h"
 
+
+#define CABLE_1     0x01u
+#define CABLE_2     0x02u
+#define CABLE_3     0x04u
+#define CABLE_4     0x08u
+
 namespace Peripherals {
     class StLedDriver : SpiInterface {
     public:
@@ -18,6 +24,8 @@ namespace Peripherals {
     public:
         void                        SetSegment(uint8_t segment, uint8_t value);
         void                        SetLed(uint8_t led, uint8_t value);
+        uint8_t                     GetCableStates();
+
 
     private:
         Peripherals::Gpio           m_writeEnable;

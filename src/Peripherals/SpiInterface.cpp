@@ -111,29 +111,25 @@ void Peripherals::SpiInterface::WriteRaw(uint8_t *values, uint8_t size) {
     write(m_fd, values, size);
 }
 
-uint8_t Peripherals::SpiInterface::ReadRaw() {
+uint8_t Peripherals::SpiInterface::Read(uint8_t memory, Gpio &rd, Gpio &wr) {
     std::lock_guard<std::mutex> lock(m_sending);
-    read(m_fd, m_buffer + SPI_READ_VALUE_BUFFER, 1);
-
-    return BitReverseTable[m_buffer[SPI_READ_VALUE_BUFFER]];
-}
-
-void Peripherals::SpiInterface::ReadRaw(uint8_t *buffer, uint8_t size) {
-    std::lock_guard<std::mutex> lock(m_sending);
-    read(m_fd, buffer, size);
-
-    for (int i = 0; i < size; ++i) {
-        buffer[i] = BitReverseTable[buffer[i]];
-    }
-}
-
-void Peripherals::SpiInterface::ReadWriteRaw(uint8_t *txBuffer, uint8_t *rxBuffer, uint8_t size) {
     struct spi_ioc_transfer xfer = {0};
 
-    xfer.tx_buf = (unsigned long) txBuffer;
-    xfer.rx_buf = (unsigned long) rxBuffer;
-    xfer.len = size;
+    memory = BitReverseTable[memory];
 
-    std::lock_guard<std::mutex> lock(m_sending);
+    xfer.tx_buf = (unsigned long) &memory;
+    xfer.rx_buf = 0;
+    xfer.cs_change = 1;
+    xfer.len = 1;
+
     ioctl(m_fd, SPI_IOC_MESSAGE(1), &xfer);
+
+
+    wr.SetValue(rd.GetValue());
+    rd.SetValue(!wr.GetValue());
+    read(m_fd, m_buffer + SPI_READ_VALUE_BUFFER, 1);
+
+    rd.SetValue(wr.GetValue());
+    wr.SetValue(!rd.GetValue());
+    return BitReverseTable[m_buffer[SPI_READ_VALUE_BUFFER]];
 }

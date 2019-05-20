@@ -36,6 +36,9 @@ namespace Peripherals {
         void                        SetUserInput(int segment);
         void                        ResetUserInput();
 
+    public:
+        Peripherals::StLedDriver&   GetDriver();
+
     private:
         Peripherals::StLedDriver    m_driver;
         int                         m_status;
@@ -45,7 +48,7 @@ namespace Peripherals {
 
     private:
         void                        ShowToScreen(int *segment);
-        static void                        ShowSegmentToScreen(unsigned segment, unsigned index);
+        static void                 ShowSegmentToScreen(unsigned segment, unsigned index);
         void                        SimulateLeds();
     };
 };

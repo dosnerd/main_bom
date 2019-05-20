@@ -12,7 +12,8 @@
 #include <sys/stat.h>
 
 Bom::Bom()
-        : m_startTime(0), m_start(0), m_duration(0), m_file(""), m_displayError(false), m_userInput(0), m_iUserInput(0),
+        : m_startTime(0), m_start(0), m_duration(0), m_fuses(m_display.GetDriver()), m_file(""), m_displayError(false),
+          m_userInput(0), m_iUserInput(0),
           m_userInputActive(false) {
 
 }
@@ -37,7 +38,7 @@ void Bom::WaitForArmed() {
     }
 
     settings = connection.Execute(input, 0);
-    if (settings.size() < 7) {
+    if (settings.size() < 8) {
         std::cout << "ERR SETUP" << connection.GetFeedback() << std::endl;
         m_display.Safe();
         goto SEARCH;
@@ -45,17 +46,19 @@ void Bom::WaitForArmed() {
 
     SetCountdown(settings[0], settings[1], settings[2]);
     SetStartTime(settings[3], settings[4], settings[5]);
-    if (settings[6] > 0)
+    m_fuses.SetCableFilter(settings[7]);
+
+    if (settings[6] > 0) {
         m_fuses.SetMinCodes(settings[6]);
+    }
+
 
     std::cout << "Setup done" << std::endl;
 }
 
 void Bom::WaitForCountdown() {
-    int ms = -1;
-    int buffer[8] = {0};
     bool toggle = false;
-    unsigned currentTime;
+    int showCurrentTime = 1;
 
     m_start = time(nullptr);
     m_start -= m_start % 86400; //Remove hours
@@ -66,7 +69,7 @@ void Bom::WaitForCountdown() {
 
 
     while (time(nullptr) <= m_start) {
-        currentTime = time(nullptr);
+        const unsigned currentTime = time(nullptr);
         if ((currentTime & 0x01u) == 0x01) {
             toggle = true;
         } else if (toggle) {
@@ -76,19 +79,7 @@ void Bom::WaitForCountdown() {
             m_display.SetLed(Peripherals::Display::ARMED, BLACK);
         }
 
-        if ((currentTime & 0x03u) == 0x03) {
-            std::chrono::system_clock::time_point utc2 =
-                    std::chrono::system_clock::from_time_t(m_start) + std::chrono::hours(2);
-            ExtractTime(buffer, utc2.time_since_epoch(), ms);
-
-            for (int i = 0; i < 6; ++i) {
-                buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
-            }
-            std::cout << std::endl;
-            m_display.DisplaySegments(buffer);
-        } else {
-            m_display.Clear();
-        }
+        DrawWaitDisplay(showCurrentTime, currentTime);
 
         usleep(1000 * 100);
     }
@@ -102,6 +93,7 @@ void Bom::CountDown() {
     for (unsigned i = 1; i <= m_fuses.GetIncorrectCodes(); ++i) {
         m_duration -= i * PENALTY_STEPS;
     }
+    m_duration += CABLE_BONUS * m_fuses.GetCableBonus();
 
     m_display.SetLed(Peripherals::Display::STATUS, BLACK);
     while ((currentTime = time(nullptr)) < (m_start + m_duration) &&
@@ -141,35 +133,39 @@ void Bom::SetStartTime(int h, int m, int s) {
 void Bom::DisplayUpdater() {
     AssembleConnection connection;
     int buffer[8] = {0};
-    int ms, trigger;
+    int ms = 0;
+    int trigger = 0;
     std::chrono::system_clock::time_point end;
     std::chrono::system_clock::time_point end_copy;
+    std::chrono::system_clock::duration timeLeft;
 
 
-    trigger = 0;
     while (m_duration > 0) {
         SearchBomFile(connection);
         end_copy = end;
         end = std::chrono::system_clock::from_time_t(m_start + m_duration);
-        std::chrono::system_clock::duration timeLeft = end - std::chrono::system_clock::now();
+        timeLeft = end - std::chrono::system_clock::now();
 
         ExtractTime(buffer, timeLeft, ms);
-
         trigger = ArmedNotifier(ms, trigger, timeLeft);
 
         if (m_userInputActive) {
             m_display.DisplayUserInputs();
         } else {
-            connection = DisplayTime(connection, buffer);
+            connection = DisplayTime(connection, buffer, ms);
         }
-//        std::cout << "File: " << m_file << "         " << std::endl;
-//        std::cout << "ms: " << ms << "         " << std::endl;
-//        std::cout << "trigger: " << trigger << "         " << std::endl;
 
+        m_duration += m_fuses.GetCableFuses() * CABLE_BONUS;
         usleep(10 * 1000);
     }
 
-    ExtractTime(buffer, end_copy - std::chrono::system_clock::now(), ms);
+
+    timeLeft = end - std::chrono::system_clock::now();
+    if (timeLeft.count() < 0)
+        ExtractTime(buffer, timeLeft.zero(), ms);
+    else
+        ExtractTime(buffer, timeLeft, ms);
+
     for (int i = 0; i < 6; ++i) {
         buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
     }
@@ -200,8 +196,10 @@ int *Bom::ExtractTime(int *buffer, std::chrono::system_clock::duration time, int
     milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(time);
     time -= milliseconds;
 
-    ms = milliseconds.count() / 10;
-    if (hour.count() == 0) {
+    if (ms >= 0) {
+        ms = milliseconds.count() / 10;
+    }
+    if (hour.count() == 0 && ms >= 0) {
         offset = 2;
 
         buffer[0] = ms % 10;
@@ -297,7 +295,7 @@ void Bom::AssembleError(AssembleConnection &connection) {
             return;
 
         file << feedback;
-        std::cout << feedback << std::endl;
+        std::cout << "ASM ERROR: " << feedback << std::endl;
 
         file.close();
         m_displayError = true;
@@ -324,12 +322,14 @@ bool Bom::HasExtension(char *filename) {
     return name.size() > 3 && name.compare(name.size() - 3, 3, "bom") == 0;
 }
 
-AssembleConnection &Bom::DisplayTime(AssembleConnection &connection, int *buffer) {
+AssembleConnection &Bom::DisplayTime(AssembleConnection &connection, int *buffer, int ms) {
     int encrypted[8] = {0};
     std::vector<int> processed;
 
     for (int i = 0; i < 6; ++i) {
         buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
+        if ((i & 0x01u) == 0 && i > 0 && ms > 50)
+            buffer[i] |= 0x80;
 
         Encrypt(buffer, encrypted);
         processed = connection.Execute(encrypted, 8);
@@ -429,8 +429,7 @@ void Bom::CheckUserCode() {
     unsigned now = time(nullptr);
 
     if (m_iUserInput > -1) {
-//        trigger = now + CODE_VALIDATE_TIMEOUT;
-        trigger = now + 1;
+        trigger = now + CODE_VALIDATE_TIMEOUT;
         return;
     } else if (trigger > now) {
         if ((now & 0x01u) == 0x01) {
@@ -493,4 +492,34 @@ int Bom::ArmedNotifier(int ms, int trigger, const std::chrono::system_clock::dur
         }
     }
     return trigger;
+}
+
+void Bom::DrawWaitDisplay(int &showCurrentTime, const unsigned int &currentTime) {
+    int ms = -1;
+    int buffer[6];
+    std::chrono::system_clock::time_point utc2;
+
+    if ((currentTime & 0x03u) == 0x03) {
+        if (showCurrentTime == 1) {
+            utc2 = std::chrono::system_clock::from_time_t(m_start) + std::chrono::hours(2);
+            m_display.SetLed(Peripherals::Display::STATUS, GREEN);
+            showCurrentTime = -2;
+        } else if (showCurrentTime == 2) {
+            utc2 = std::chrono::system_clock::now() + std::chrono::hours(2);
+            m_display.SetLed(Peripherals::Display::STATUS, BLUE);
+            showCurrentTime = -1;
+        } else {
+            return;
+        }
+        ExtractTime(buffer, utc2.time_since_epoch(), ms);
+
+        for (int i = 0; i < 6; ++i) {
+            buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
+        }
+        m_display.DisplaySegments(buffer);
+    } else {
+        m_display.Clear();
+        if (showCurrentTime < 0)
+            showCurrentTime *= -1;
+    }
 }

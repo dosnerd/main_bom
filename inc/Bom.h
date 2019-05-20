@@ -54,11 +54,12 @@ private:
 
     static bool                     HasExtension(char *filename);
 
-    AssembleConnection &            DisplayTime(AssembleConnection &connection, int *buffer);
+    AssembleConnection &            DisplayTime(AssembleConnection &connection, int *buffer, int ms);
     void                            ReadKeyPad();
     void                            CheckUserCode();
 
     int                             ArmedNotifier(int ms, int trigger, const std::chrono::system_clock::duration &timeLeft);
+    void                            DrawWaitDisplay(int &showCurrentTime, const unsigned int &currentTime);
 };
 
 

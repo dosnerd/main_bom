@@ -3,15 +3,16 @@
 //
 
 #include <fstream>
+#include <iostream>
 #include "Fuses.h"
 
-#define FILTER_ID			0b110011001100u
-#define FILTER_RANDOM		0b001000100010u
-#define FILTER_CHECKSUM		0b000100010001u
+#define FILTER_ID            0b110011001100u
+#define FILTER_RANDOM        0b001000100010u
+#define FILTER_CHECKSUM        0b000100010001u
 
-Fuses::Fuses()
-    : m_codes(0), m_minLimitCodes(NUMBER_OF_PUZZELS), m_incorrect(0), m_puzzles{false}
-{
+Fuses::Fuses(Peripherals::StLedDriver &ledDriver)
+        : m_ledDriver(ledDriver), m_cables(ledDriver.GetCableStates()), m_cableFilter(0), m_cableBonus(0), m_codes(0), m_minLimitCodes(NUMBER_OF_PUZZELS), m_incorrect(0),
+          m_puzzles{false} {
     LoadFromFile();
 }
 
@@ -21,12 +22,20 @@ const unsigned Fuses::GetActiveFuses() const {
             (m_minLimitCodes - (m_codes - m_incorrect));
 }
 
-const unsigned& Fuses::GetIncorrectCodes() const{
+const unsigned &Fuses::GetIncorrectCodes() const {
     return m_incorrect;
+}
+
+const int &Fuses::GetCableBonus() const {
+    return m_cableBonus;
 }
 
 void Fuses::SetMinCodes(unsigned nCodes) {
     m_minLimitCodes = nCodes;
+}
+
+void Fuses::SetCableFilter(unsigned filter) {
+    m_cableFilter = filter;
 }
 
 bool Fuses::CheckCode(unsigned code) {
@@ -41,13 +50,35 @@ bool Fuses::CheckCode(unsigned code) {
     return true;
 }
 
+const unsigned Fuses::GetCableFuses() {
+    uint8_t cables = m_ledDriver.GetCableStates();
+    uint8_t changes = cables ^ m_cables;
+
+    if (changes == 0) return 0;
+    if ((changes & m_cableFilter) == 0 && (cables & changes) == 0){
+        m_cableBonus += 1;
+        m_cables = cables;
+        SaveToFile();
+
+//        std::cout << "Good cable" << std::endl;
+        return 1;
+    } else {
+        m_cableBonus -= 1;
+        m_cables = cables;
+        SaveToFile();
+
+//        std::cout << "Bad cable" << std::endl;
+        return -1;
+    }
+}
+
 bool Fuses::ValidateCode(unsigned code) {
     unsigned idCode = code & FILTER_ID;
     unsigned random = code & FILTER_RANDOM;
     unsigned checksum = code & FILTER_CHECKSUM;
-    unsigned idLower = idCode &  0b000000001100u;
+    unsigned idLower = idCode & 0b000000001100u;
     unsigned idMiddle = idCode & 0b000011000000u;
-    unsigned idUpper = idCode &  0b110000000000u;
+    unsigned idUpper = idCode & 0b110000000000u;
     unsigned id = (idUpper >> 6u) | (idMiddle >> 4u) | (idLower >> 2u);
 
     if (!CheckChecksum(idCode, random, checksum)) {
@@ -78,6 +109,7 @@ void Fuses::LoadFromFile() {
 
     if (!file) return;
 
+    file >> m_cableBonus;
     file >> m_codes;
     file >> m_minLimitCodes;
     file >> m_incorrect;
@@ -91,6 +123,8 @@ void Fuses::LoadFromFile() {
 
 void Fuses::SaveToFile() {
     std::ofstream file("./fuses");
+
+    file << m_cableBonus << std::endl;
     file << m_codes << std::endl;
     file << m_minLimitCodes << std::endl;
     file << m_incorrect << std::endl;

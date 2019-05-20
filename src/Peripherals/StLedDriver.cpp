@@ -46,6 +46,8 @@
 
 #define WRITE                       0x00u
 #define READ                        0x40u
+#define READ_PAGE                   0x08u
+#define KEY1                        0x01u
 
 Peripherals::StLedDriver::StLedDriver()
     : SpiInterface("/dev/spidev0.0", SPI_MODE_3),
@@ -53,6 +55,7 @@ Peripherals::StLedDriver::StLedDriver()
       m_readEnable(Peripherals::Gpio::ReadEnable, Peripherals::Gpio::OUT)
 {
     Setup();
+    m_readEnable.SetValue(GPIO_HIGH);
 }
 
 void Peripherals::StLedDriver::SetSegment(uint8_t segment, uint8_t value) {
@@ -97,6 +100,10 @@ void Peripherals::StLedDriver::SetLed(uint8_t led, uint8_t value) {
         memory >>= 4;
 
     WriteToMemory(LED_BANK, memory);
+}
+
+uint8_t Peripherals::StLedDriver::GetCableStates() {
+    return Read(READ_PAGE | KEY1 | READ, m_readEnable, m_writeEnable);
 }
 
 void Peripherals::StLedDriver::Setup() {
