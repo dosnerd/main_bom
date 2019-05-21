@@ -23,7 +23,7 @@ namespace Peripherals {
 
     public:
         void                        SetSegment(uint8_t segment, uint8_t value);
-        void                        SetLed(uint8_t led, uint8_t value);
+        void                        SetLeds(uint8_t led1, uint8_t led2);
         uint8_t                     GetCableStates();
 
 
@@ -34,6 +34,8 @@ namespace Peripherals {
     private:
         void                        Setup();
         void                        WriteToMemory(uint8_t address, uint8_t value);
+
+        uint8_t                     TranslateColor(uint8_t color);
     };
 };
 

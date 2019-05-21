@@ -34,24 +34,25 @@ void Bom::WaitForArmed() {
         usleep(100 * 1000);
         SearchBomFile(connection, "./setup.bom");
 
-        if (m_file.empty()) goto SEARCH;
+        if (m_file.empty()) {
+            m_display.SetLed(Peripherals::Display::STATUS, BLACK);
+            goto SEARCH;
+        }
     }
 
     settings = connection.Execute(input, 0);
-    if (settings.size() < 8) {
-        std::cout << "ERR SETUP" << connection.GetFeedback() << std::endl;
+    if (settings.size() < 8 + NUMBER_OF_JUMPER_COLUMNS) {
+        std::cout << "ERR SETUP " << connection.GetFeedback() << std::endl;
+        std::cout << "#outputs " << settings.size() << std::endl;
         m_display.Safe();
+        m_display.SetLed(Peripherals::Display::STATUS, RED);
+
+        if (m_file == "./setup.bom")
+            system("rm ./setup.bom");
         goto SEARCH;
     }
 
-    SetCountdown(settings[0], settings[1], settings[2]);
-    SetStartTime(settings[3], settings[4], settings[5]);
-    m_fuses.SetCableFilter(settings[7]);
-
-    if (settings[6] > 0) {
-        m_fuses.SetMinCodes(settings[6]);
-    }
-
+    ApplySettings(settings);
 
     std::cout << "Setup done" << std::endl;
 }
@@ -90,36 +91,48 @@ void Bom::CountDown() {
     unsigned currentTime;
     std::thread displayer(&Bom::DisplayUpdater, this);
 
-    for (unsigned i = 1; i <= m_fuses.GetIncorrectCodes(); ++i) {
-        m_duration -= i * PENALTY_STEPS;
-    }
-    m_duration += CABLE_BONUS * m_fuses.GetCableBonus();
+    try {
+        for (unsigned i = 1; i <= m_fuses.GetIncorrectCodes(); ++i) {
+            m_duration -= i * PENALTY_STEPS;
+        }
+        m_duration += CABLE_BONUS * m_fuses.GetCableBonus();
 
-    m_display.SetLed(Peripherals::Display::STATUS, BLACK);
-    while ((currentTime = time(nullptr)) < (m_start + m_duration) &&
-           m_fuses.GetActiveFuses() > 0) {
+        m_display.SetLed(Peripherals::Display::STATUS, BLACK);
+        while ((currentTime = time(nullptr)) < (m_start + m_duration) &&
+               m_fuses.GetActiveFuses() > 0) {
 
-        if (m_keypad.Check()) {
-            m_display.SetLed(Peripherals::Display::STATUS, BLUE);
-            m_userInputActive = true;
+            if (m_keypad.Check()) {
+                m_display.SetLed(Peripherals::Display::STATUS, BLUE);
+                m_userInputActive = true;
 
-            ReadKeyPad();
+                ReadKeyPad();
+            }
+
+            m_jumpers.Monitor();
+
+            CheckUserCode();
+            usleep(100 * 1000);
+        }
+        m_display.SetLed(Peripherals::Display::STATUS, BLACK);
+        m_duration = 0;
+
+        if (m_fuses.GetActiveFuses() > 0) {
+            std::cout << "BIEM" << std::endl;
         }
 
-        CheckUserCode();
-        usleep(1 * 1000 * 1000);
+        system("rm ./setup.bom");
+        system("rm ./fuses");
+        displayer.join();
+    } catch (const char *err) {
+        m_duration = 0;
+        displayer.join();
+    } catch (std::string &err) {
+        m_duration = 0;
+        displayer.join();
+    } catch (std::exception &err) {
+        m_duration = 0;
+        displayer.join();
     }
-    m_display.SetLed(Peripherals::Display::STATUS, BLACK);
-    m_duration = 0;
-
-    if (m_fuses.GetActiveFuses() > 0) {
-        std::cout << "BIEM" << std::endl;
-    }
-
-    system("rm ./setup.bom");
-    system("rm ./fuses");
-    displayer.join();
-
 }
 
 void Bom::SetCountdown(int h, int m, int s) {
@@ -149,7 +162,10 @@ void Bom::DisplayUpdater() {
         ExtractTime(buffer, timeLeft, ms);
         trigger = ArmedNotifier(ms, trigger, timeLeft);
 
-        if (m_userInputActive) {
+        if (m_iUserInput == -1) {
+            m_display.Wait();
+        }
+        else if (m_userInputActive) {
             m_display.DisplayUserInputs();
         } else {
             connection = DisplayTime(connection, buffer, ms);
@@ -231,6 +247,7 @@ int *Bom::ExtractTime(int *buffer, std::chrono::system_clock::duration time, int
 void Bom::SearchBomFile(AssembleConnection &connection, const std::string &moveTo) {
     std::string file = SearchInDir("/media/");
     struct stat buffer{};
+    int testBuffer[8] = {0};
 
     if (file == m_file && !m_file.empty()) {
         return;
@@ -238,8 +255,8 @@ void Bom::SearchBomFile(AssembleConnection &connection, const std::string &moveT
         // Check if file exists
         if (stat(moveTo.c_str(), &buffer) == 0) {
             if (m_file != moveTo) {
-                connection.StartAssembler(moveTo);
                 m_file = moveTo;
+                connection.StartAssembler(moveTo);
             }
         } else {
             m_file = "";
@@ -247,11 +264,22 @@ void Bom::SearchBomFile(AssembleConnection &connection, const std::string &moveT
         return;
     }
 
-    m_file = file;
+    m_file = moveTo;
     m_displayError = false;
 
     system(("cp " + file + " " + moveTo).c_str());
     connection.StartAssembler(moveTo);
+
+    //Perform test before umounting
+    std::vector<int> processed;
+    processed = connection.Execute(testBuffer, 8);
+
+    if (processed.empty()) {
+        AssembleError(connection);
+    }
+
+    system("umount /media/*");
+    std::cout << "USB FREE" << std::endl;
 }
 
 std::string Bom::SearchInDir(const std::string &dirName) {
@@ -330,14 +358,10 @@ AssembleConnection &Bom::DisplayTime(AssembleConnection &connection, int *buffer
         buffer[i] = Peripherals::Display::To7Segment(buffer[i]);
         if ((i & 0x01u) == 0 && i > 0 && ms > 50)
             buffer[i] |= 0x80;
-
-        Encrypt(buffer, encrypted);
-        processed = connection.Execute(encrypted, 8);
     }
 
-    if (processed.empty()) {
-        AssembleError(connection);
-    }
+    Encrypt(buffer, encrypted);
+    processed = connection.Execute(encrypted, 8);
 
     for (int j = processed.size(); j < 6; ++j) {
         processed.push_back(encrypted[j]);
@@ -349,6 +373,21 @@ AssembleConnection &Bom::DisplayTime(AssembleConnection &connection, int *buffer
 void Bom::ReadKeyPad() {
     enum Peripherals::Keypad::Key pressed = m_keypad.GetKey();
 
+    if (pressed == Peripherals::Keypad::KEY_CAD) {
+        std::cout << "CAD" << std::endl;
+        throw "CAD";
+    }
+
+    if (!m_jumpers.Correct()) {
+        m_display.SetLed(Peripherals::Display::STATUS, BLACK);
+        m_userInputActive = false;
+
+        std::cout << "Not permitted" << std::endl;
+        m_jumpers.PrintMap();
+        return;
+    } else {
+        std::cout << "Key permitted" << std::endl;
+    }
     if (m_iUserInput == -1) return;
     if (pressed != Peripherals::Keypad::KEY_ASTERISK && pressed != Peripherals::Keypad::KEY_HASH_TAG) {
         if (m_iUserInput >= 6 || m_iUserInput < 0) return;
@@ -403,6 +442,7 @@ void Bom::ReadKeyPad() {
             break;
 
         case Peripherals::Keypad::KEY_ASTERISK:
+
             m_display.ResetUserInput();
             m_userInput = 0;
             m_iUserInput = 0;
@@ -411,6 +451,7 @@ void Bom::ReadKeyPad() {
             break;
 
         case Peripherals::Keypad::KEY_HASH_TAG:
+
             if (m_iUserInput > 0) {
                 m_iUserInput = -1;
             } else {
@@ -420,6 +461,10 @@ void Bom::ReadKeyPad() {
                 m_userInputActive = false;
                 m_display.SetLed(Peripherals::Display::STATUS, BLACK);
             }
+            break;
+
+        case Peripherals::Keypad::KEY_CAD:
+            exit(1);
             break;
     }
 }
@@ -443,6 +488,7 @@ void Bom::CheckUserCode() {
         m_userInput = 0;
         m_iUserInput = 0;
         m_userInputActive = false;
+
         m_display.SetLed(Peripherals::Display::STATUS, BLACK);
         return;
     } else if (m_iUserInput == -1) {
@@ -521,5 +567,22 @@ void Bom::DrawWaitDisplay(int &showCurrentTime, const unsigned int &currentTime)
         m_display.Clear();
         if (showCurrentTime < 0)
             showCurrentTime *= -1;
+    }
+}
+
+void Bom::ApplySettings(const std::vector<int> &settings) {
+    uint8_t jumperMap[NUMBER_OF_JUMPER_COLUMNS] = { };
+
+    SetCountdown(settings[0], settings[1], settings[2]);
+    SetStartTime(settings[3], settings[4], settings[5]);
+    m_fuses.SetCableFilter(settings[7]);
+
+    for (int i = 0; i < NUMBER_OF_JUMPER_COLUMNS; ++i) {
+        jumperMap[i] = settings[i + 8];
+    }
+    m_jumpers.SetMap(jumperMap);
+
+    if (settings[6] > 0) {
+        m_fuses.SetMinCodes(settings[6]);
     }
 }

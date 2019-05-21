@@ -18,30 +18,34 @@ void Peripherals::Display::DisplaySegments(int *segments) {
     ShowToScreen(segments);
 #else
     for (int i = 0; i < 6; ++i) {
-            m_driver.SetSegment(5 - i, segments[i]);
+        m_driver.SetSegment(5 - i, segments[i]);
     }
 #endif
 }
 
 void Peripherals::Display::SetLed(Peripherals::Display::Led led, int value) {
+    bool update = false;
     switch (led) {
         case STATUS:
-#if !SIMULATION
             if (m_status != value) {
-                m_driver.SetLed(1, value);
+                update = true;
             }
-#endif
             m_status = value;
             break;
         case ARMED:
-#if !SIMULATION
             if (m_armed != value) {
-                m_driver.SetLed(0, value);
+                update = true;
             }
-#endif
             m_armed = value;
             break;
     }
+
+#if !SIMULATION
+    if (update)
+        m_driver.SetLeds(m_armed, m_status);
+#else
+    (void)update;
+#endif
 }
 
 void Peripherals::Display::Safe() {
@@ -53,6 +57,25 @@ void Peripherals::Display::Safe() {
 
     SetLed(ARMED, BLACK);
     SetLed(STATUS, GREEN);
+    DisplaySegments(segments);
+}
+
+void Peripherals::Display::Wait() {
+    static int pos = 0;
+    int segments[6] = {0};
+    if (pos < 6) {
+        segments[pos] = 0x01;
+    } else if (pos < 8) {
+        segments[5] = 1u << (11u - pos);
+    } else if (pos < 14) {
+        segments[13 - pos] = 0x08;
+    } else if (pos < 16) {
+        segments[0] = 1u << (16u - pos);
+    }
+
+    if (++pos >= 16)
+        pos = 0;
+
     DisplaySegments(segments);
 }
 

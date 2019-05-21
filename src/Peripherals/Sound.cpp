@@ -6,7 +6,7 @@
 #include <alsa/error.h>
 #include <math.h>
 #include "Peripherals/Sound.h"
-#include "../../../tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/include/c++/4.9.3/iostream"
+#include <iostream>
 
 
 Peripherals::Sound::Sound()

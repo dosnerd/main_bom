@@ -10,6 +10,7 @@
 #include <Peripherals/Keypad.h>
 #include <Peripherals/Sound.h>
 #include "Fuses.h"
+#include "JumperInterconnect.h"
 #include <chrono>
 
 typedef std::chrono::duration<int, std::ratio_multiply<std::chrono::hours::period, std::ratio<24> >::type> Days;
@@ -31,6 +32,7 @@ private:
     Peripherals::Display            m_display;
     Peripherals::Keypad             m_keypad;
     Peripherals::Sound              m_sound;
+    JumperInterconnect              m_jumpers;
     Fuses                           m_fuses;
     std::string                     m_file;
     bool                            m_displayError;
@@ -60,6 +62,8 @@ private:
 
     int                             ArmedNotifier(int ms, int trigger, const std::chrono::system_clock::duration &timeLeft);
     void                            DrawWaitDisplay(int &showCurrentTime, const unsigned int &currentTime);
+
+    void                            ApplySettings(const std::vector<int> &settings);
 };
 
 

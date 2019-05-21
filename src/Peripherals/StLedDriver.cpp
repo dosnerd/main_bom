@@ -35,14 +35,14 @@
 #define SETUP_CONSTANT              0x0Cu
 #define SETUP_VARIABLE              0x00u
 
-#define ARMED_R                     0x80
-#define ARMED_G                     0x40
-#define ARMED_B                     0x20
-#define ARMED_W                     0x10
-#define STATUS_R                    0x08
-#define STATUS_G                    0x04
-#define STATUS_B                    0x02
-#define STATUS_W                    0x01
+#define ARMED_R                     0x80u
+#define ARMED_G                     0x40u
+#define ARMED_B                     0x20u
+#define ARMED_W                     0x10u
+#define STATUS_R                    0x08u
+#define STATUS_G                    0x04u
+#define STATUS_B                    0x02u
+#define STATUS_W                    0x01u
 
 #define WRITE                       0x00u
 #define READ                        0x40u
@@ -50,10 +50,9 @@
 #define KEY1                        0x01u
 
 Peripherals::StLedDriver::StLedDriver()
-    : SpiInterface("/dev/spidev0.0", SPI_MODE_3),
-      m_writeEnable(Peripherals::Gpio::WriteEnable, Peripherals::Gpio::OUT),
-      m_readEnable(Peripherals::Gpio::ReadEnable, Peripherals::Gpio::OUT)
-{
+        : SpiInterface("/dev/spidev0.0", SPI_MODE_3),
+          m_writeEnable(Peripherals::Gpio::WriteEnable, Peripherals::Gpio::OUT),
+          m_readEnable(Peripherals::Gpio::ReadEnable, Peripherals::Gpio::OUT) {
     Setup();
     m_readEnable.SetValue(GPIO_HIGH);
 }
@@ -62,42 +61,10 @@ void Peripherals::StLedDriver::SetSegment(uint8_t segment, uint8_t value) {
     WriteToMemory(SEGMENT_BANK | segment, value);
 }
 
-void Peripherals::StLedDriver::SetLed(uint8_t led, uint8_t value) {
+void Peripherals::StLedDriver::SetLeds(uint8_t led1, uint8_t led2) {
     int memory = 0;
-
-    switch (value) {
-        case BLACK:
-            break;
-        case RED:
-            memory |= ARMED_R;
-            break;
-        case GREEN:
-            memory |= ARMED_G;
-            break;
-        case YELLOW:
-            memory |= ARMED_R;
-            memory |= ARMED_G;
-            break;
-        case BLUE:
-            memory |= ARMED_B;
-            break;
-        case MAGENTA:
-            memory |= ARMED_R;
-            memory |= ARMED_B;
-            break;
-        case CYAN:
-            memory |= ARMED_G;
-            memory |= ARMED_B;
-            break;
-        case WHITE:
-            memory |= ARMED_W;
-            break;
-        default:
-            return;
-    }
-
-    if (led == 1)
-        memory >>= 4;
+    memory = TranslateColor(led1);
+    memory |= TranslateColor(led2) >> 4u;
 
     WriteToMemory(LED_BANK, memory);
 }
@@ -136,4 +103,27 @@ void Peripherals::StLedDriver::WriteToMemory(uint8_t address, uint8_t value) {
     };
 
     WriteRaw(buffer, 2);
+}
+
+uint8_t Peripherals::StLedDriver::TranslateColor(uint8_t color) {
+    switch (color) {
+        case BLACK:
+            return 0;
+        case RED:
+            return ARMED_R;
+        case GREEN:
+            return ARMED_G;
+        case YELLOW:
+            return ARMED_G | ARMED_R;
+        case BLUE:
+            return ARMED_B;
+        case MAGENTA:
+            return ARMED_B | ARMED_R;
+        case CYAN:
+            return ARMED_B | ARMED_G;;
+        case WHITE:
+            return ARMED_W;
+        default:
+            return 0;
+    }
 }

@@ -29,6 +29,7 @@ namespace Peripherals {
         void                        DisplaySegments(int *segments);
         void                        SetLed(enum Led led, int value);
         void                        Safe();
+        void                        Wait();
         void                        Clear();
         static int                  To7Segment(int digit);
 

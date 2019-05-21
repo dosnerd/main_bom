@@ -6,10 +6,18 @@
 #define MAIN_BOM_KEYPAD_H
 
 
+#define PRESSED             0x80u
+#define KEY_NUMBER          0x7F
+
+#define IS_PRESSED(KEY)     (((KEY) & PRESSED) == PRESSED)
+#define GET_KEY(KEY)        ((KEY) & KEY_NUMBER)
+
+#include "Gpio.h"
+
 namespace Peripherals {
     class Keypad {
     public:
-                            Keypad() = default;
+                            Keypad();
                             ~Keypad() = default;
 
     public:
@@ -26,7 +34,8 @@ namespace Peripherals {
             KEY9,
             KEY0,
             KEY_ASTERISK,
-            KEY_HASH_TAG
+            KEY_HASH_TAG,
+            KEY_CAD,
         };
 
     public:
@@ -34,8 +43,16 @@ namespace Peripherals {
         enum Key            GetKey();
 
     private:
+        enum Key            m_key;
+        Gpio                m_columns[3];
+        Gpio                m_rows[4];
+
+    private:
         static bool         SimulateCheck();
         enum Key            SimulateKey();
+
+        bool                Scan();
+        enum Key            DecodeMatrix(Gpio &column, Gpio &row);
     };
 };
 

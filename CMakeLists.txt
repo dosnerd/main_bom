@@ -29,6 +29,6 @@ add_definitions(-Werror)
 include_directories(inc)
 
 
-add_executable(main_bom src/main.cpp src/Peripherals/Gpio.cpp inc/Peripherals/Gpio.h inc/Config.h src/AssembleConnection.cpp inc/AssembleConnection.h src/Bom.cpp inc/Bom.h src/Peripherals/Display.cpp inc/Peripherals/Display.h src/Peripherals/Keypad.cpp inc/Peripherals/Keypad.h src/Fuses.cpp inc/Fuses.h src/Peripherals/Sound.cpp inc/Peripherals/Sound.h inc/Peripherals/SpiInterface.h src/Peripherals/SpiInterface.cpp src/Peripherals/StLedDriver.cpp inc/Peripherals/StLedDriver.h src/Peripherals/I2Cinterface.cpp inc/Peripherals/I2Cinterface.h src/Peripherals/Tca8418Interface.cpp inc/Peripherals/Tca8418Interface.h)
+add_executable(main_bom src/main.cpp src/Peripherals/Gpio.cpp inc/Peripherals/Gpio.h inc/Config.h src/AssembleConnection.cpp inc/AssembleConnection.h src/Bom.cpp inc/Bom.h src/Peripherals/Display.cpp inc/Peripherals/Display.h src/Peripherals/Keypad.cpp inc/Peripherals/Keypad.h src/Fuses.cpp inc/Fuses.h src/Peripherals/Sound.cpp inc/Peripherals/Sound.h inc/Peripherals/SpiInterface.h src/Peripherals/SpiInterface.cpp src/Peripherals/StLedDriver.cpp inc/Peripherals/StLedDriver.h src/Peripherals/I2Cinterface.cpp inc/Peripherals/I2Cinterface.h src/Peripherals/Tca8418Interface.cpp inc/Peripherals/Tca8418Interface.h inc/JumperInterconnect.cpp inc/JumperInterconnect.h)
 target_link_libraries( main_bom pthread )
 target_link_libraries( main_bom asound )

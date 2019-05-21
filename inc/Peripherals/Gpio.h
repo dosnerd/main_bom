@@ -12,6 +12,13 @@ namespace Peripherals {
             WriteEnable = 0,
             ReadEnable = 5,
             JumperInterrupt = 17,
+            C1 = 12,
+            C2 = 16,
+            C3 = 20,
+            R1 = 25,
+            R2 = 24,
+            R3 = 7,
+            R4 = 1,
         };
 
         enum            GpioType {

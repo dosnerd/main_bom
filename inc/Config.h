@@ -20,6 +20,8 @@
 #define CABLE_BONUS                     (15 * 60)
 #define CODE_VALIDATE_TIMEOUT           15
 
+#define NUMBER_OF_JUMPER_COLUMNS        8
+
 #define SPI_BUFFER_SIZE                 4                                   // Buffer size SPI
 #define SPI_READ_VALUE_BUFFER           1                                   // Location in buffer to get read value
 #define SPI_WRITE_REGISTER_BUFFER       2                                   // Location in buffer to set write reg

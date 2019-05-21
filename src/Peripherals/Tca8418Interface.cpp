@@ -73,13 +73,16 @@ void Peripherals::TCA8418Interface::Setup() {
 
 uint8_t Peripherals::TCA8418Interface::AmountKeyChanged() {
     uint8_t interrupt;
+    uint8_t events;
 
     if (m_interrupt.GetValue() == GPIO_HIGH) return 0;
 
     interrupt = Read(ADDRESS, INT_STAT);
-    std::cout << "INT " << (int) interrupt << std::endl;
     if ((interrupt & K_INT) != K_INT) return 0;
 
-    std::cout << "#keys..." << std::endl;
-    return Read(ADDRESS, KEY_LCK_EC) & KEC;
+    events = Read(ADDRESS, KEY_LCK_EC) & KEC;
+
+    if (events == 0)
+        Write(ADDRESS, INT_STAT, K_INT);
+    return events;
 }
