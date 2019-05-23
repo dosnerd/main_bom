@@ -31,21 +31,31 @@ void Bom::WaitForArmed() {
         m_display.Safe();
         SEARCH:
 
+        if (m_keypad.Check() && m_keypad.GetKey() == Peripherals::Keypad::KEY_CAD) {
+            m_display.SetLed(Peripherals::Display::STATUS, YELLOW);
+            system("modprobe -r g_ether dwc2;"
+                   "sleep 5;"
+                   "modprobe dwc2 g_ether;");
+            m_display.SetLed(Peripherals::Display::STATUS, CYAN);
+        }
+
+
         usleep(100 * 1000);
         SearchBomFile(connection, "./setup.bom");
 
         if (m_file.empty()) {
-            m_display.SetLed(Peripherals::Display::STATUS, BLACK);
+            m_display.SetLed(Peripherals::Display::STATUS, CYAN);
             goto SEARCH;
         }
     }
-
+    
     settings = connection.Execute(input, 0);
     if (settings.size() < 8 + NUMBER_OF_JUMPER_COLUMNS) {
         std::cout << "ERR SETUP " << connection.GetFeedback() << std::endl;
         std::cout << "#outputs " << settings.size() << std::endl;
         m_display.Safe();
         m_display.SetLed(Peripherals::Display::STATUS, RED);
+        usleep(1000 * 1000);
 
         if (m_file == "./setup.bom")
             system("rm ./setup.bom");
@@ -117,7 +127,9 @@ void Bom::CountDown() {
         m_duration = 0;
 
         if (m_fuses.GetActiveFuses() > 0) {
-            std::cout << "BIEM" << std::endl;
+            m_sound.Biem();
+            std::cout << "Biem" << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(4));
         }
 
         system("rm ./setup.bom");
@@ -132,6 +144,16 @@ void Bom::CountDown() {
     } catch (std::exception &err) {
         m_duration = 0;
         displayer.join();
+    }
+}
+
+void Bom::WaitForClose() {
+    while (true) {
+
+        if (m_keypad.Check() && m_keypad.GetKey() == Peripherals::Keypad::KEY_CAD) {
+            return;
+        }
+        usleep(100 * 1000);
     }
 }
 
@@ -164,8 +186,7 @@ void Bom::DisplayUpdater() {
 
         if (m_iUserInput == -1) {
             m_display.Wait();
-        }
-        else if (m_userInputActive) {
+        } else if (m_userInputActive) {
             m_display.DisplayUserInputs();
         } else {
             connection = DisplayTime(connection, buffer, ms);
@@ -571,7 +592,7 @@ void Bom::DrawWaitDisplay(int &showCurrentTime, const unsigned int &currentTime)
 }
 
 void Bom::ApplySettings(const std::vector<int> &settings) {
-    uint8_t jumperMap[NUMBER_OF_JUMPER_COLUMNS] = { };
+    uint8_t jumperMap[NUMBER_OF_JUMPER_COLUMNS] = {};
 
     SetCountdown(settings[0], settings[1], settings[2]);
     SetStartTime(settings[3], settings[4], settings[5]);

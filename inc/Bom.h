@@ -24,6 +24,7 @@ public:
     void                            WaitForArmed();
     void                            WaitForCountdown();
     void                            CountDown();
+    void                            WaitForClose();
 
 private:
     unsigned                        m_startTime;

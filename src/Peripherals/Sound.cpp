@@ -7,6 +7,7 @@
 #include <math.h>
 #include "Peripherals/Sound.h"
 #include <iostream>
+#include <Biem.h>
 
 
 Peripherals::Sound::Sound()
@@ -33,7 +34,7 @@ Peripherals::Sound::Sound()
 
     m_playAsset = true;
     for (long j = 0; j < BUFFER_SIZE; j++) {
-        m_beepBuffer[j] = sin(2 * M_PI * j / SAMPLE_RATE * 2000);
+        m_beepBuffer[j] = sin(2 * M_PI * j / SAMPLE_RATE * 2000) * 0.25;
     }
     for (long j = 0; j < BUFFER_SIZE * 10; j++) {
         if ((j / BUFFER_SIZE) % 5 < 3)
@@ -63,13 +64,21 @@ void Peripherals::Sound::Beep() {
 void Peripherals::Sound::Wrong() {
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-//        if (m_playAsset)
-//            return;
 
         m_buffer = m_wrongBuffer;
         m_loops = 10;
         m_playAsset = true;
     }
+}
+
+void Peripherals::Sound::Biem() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    union BiemConvert convert;
+    convert.biem_char = biem_raw;
+
+    m_buffer = convert.biem_float;
+    m_loops = biem_raw_len / sizeof(float) / BUFFER_SIZE;
+    m_playAsset = true;
 }
 
 void Peripherals::Sound::Stop() {

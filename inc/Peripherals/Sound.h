@@ -27,6 +27,7 @@ namespace Peripherals {
     public:
         void                    Beep();
         void                    Wrong();
+        void                    Biem();
         void                    Stop();
 
     private:

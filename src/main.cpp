@@ -11,10 +11,15 @@
 
 int main() {
     try {
+//        Peripherals::Sound sound;
+//        sound.Biem();
+//        std::this_thread::sleep_for(std::chrono::seconds(5));
+
         Bom bom;
         bom.WaitForArmed();
         bom.WaitForCountdown();
         bom.CountDown();
+        bom.WaitForClose();
 
         std::cout << "END GAME" << std::endl;
     } catch (const char *err) {
